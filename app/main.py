@@ -88,7 +88,7 @@ def chat(req: ChatRequest):
         )
     
     # LLM-A safety classifier goes here. hard code skip for now
-    trace["safety"]["llm_classifier"] = {"skipped": True, "reason": "demo_v1"}
+    trace["safety"]["llm_classifier"] = {"skipped": True, "reason": "demo_v0.1"}
 
     # routing: call LLM-A to output a validated JSON plan. hard coded direct for now
     route = "direct_answer"
