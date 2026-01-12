@@ -7,6 +7,7 @@ from fastapi import Request
 
 from .safety.deterministic import deterministic_safety_check
 from .router.llm_router import route_with_llm
+from .tools.dispatch import run_tools
 
 import time
 import uuid
@@ -117,9 +118,23 @@ def chat(req: ChatRequest):
             trace["execution"] = {"performed": "clarify"}
 
         elif route == "tool":
-            # For now: stub until you implement lookup_fault_code
-            trace["execution"] = {"performed": "tool_stub", "tool_calls": [tc.model_dump() for tc in plan.tool_calls]}
-            answer = f"(Demo) Routed to tool. Would execute: {plan.tool_calls}"
+            tool_results = run_tools(plan.tool_calls)
+            trace["execution"] = {"performed": "tool", "tool_results": tool_results}
+
+            # no ai agent yet to coordinate output, so just oputput user friendly message for now
+            if tool_results["calls"]:
+                first = tool_results["calls"][0]["output"]
+                if first.get("found"):
+                    answer = (
+                        f"**{first['code']} - {first.get('title', '')}**\n\n"
+                        f"{first.get('summary', '')}\n\n"
+                        f"**Common causes:**\n- " + "\n- ".join(first.get("common_causes", [])) + "\n\n"
+                        f"**Safe checks:**\n- " + "\n- ".join(first.get("safe_checks", []))
+                    )
+                else:
+                    answer = f"I couldn't find that fault code in the demo database: {first.get('error')}"
+            else:
+                answer = "No tool calls were executed."
 
         elif route == "rag":
             trace["execution"] = {"performed": "rag_stub", "rag_query": plan.rag_query}
