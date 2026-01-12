@@ -3,9 +3,14 @@ from pydantic import BaseModel, Field
 
 RouteMode = Literal["direct_answer", "rag", "tool", "hybrid", "clarify"]
 
+ToolName = Literal["lookup_fault_code"]
+
+class FaultCodeArgs(BaseModel):
+    code: str = Field(..., description="OBD_II / Link fault code string, e.g. P0123")
+
 class ToolCall(BaseModel):
-    name: str = Field(..., description="Tool identifier")
-    args: Dict[str, Any] = Field(default_factory=dict)
+    name: ToolName
+    args: FaultCodeArgs
 
 class RoutePlan(BaseModel):
     mode: RouteMode
