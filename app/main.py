@@ -2,6 +2,8 @@ from typing import Any, Dict, List, Optional, Union
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from .safety.deterministic import deterministic_safety_check
+
 import time
 import uuid
 
@@ -20,6 +22,7 @@ class ChatResponse(BaseModel):
     answer:str
     citations: List[Dict[str, Any]] = []
     telemetry: Dict[str, Any] = {}
+    trace: Dict[str, Any] = {}
 
 @app.get("/health")
 def health():
@@ -31,7 +34,50 @@ def chat(req: ChatRequest):
     t0 = time.time()
 
     # normalise just a little
-    message = req.message.strip()
+    raw_message = req.message
+    message = (raw_message or "").strip()
+
+    trace: Dict[str, Any] = {
+        "input": {
+            "message_chars": len(message),
+            "has_conversation_summary": bool(req.conversation_summary),
+            "user_profile_keys": list(req.user_profile.keys()),
+            "ecu_context_keys": list(req.ecu_context.keys()),
+            "num_attachments": len(req.attachments)
+            },
+        "safety": {},
+        "routing": {},
+        "execution": {}
+    }
+
+    # safety (deterministically for now)
+    det = deterministic_safety_check(message)
+    trace["safety"]["deterministic"] = det
+    domain = det["domain"]
+
+    if det["blocked"]:
+        route = "refuse_unsafe"
+        answer = (
+            f"Unfortunately, your request contains wording that is associated with malicious prompt injection (domain: {domain})." \
+            f"I am unable to assist any further with this question." \
+            f"I can help you with a different question, or feel free to contact our support team." \
+        )
+
+        telemetry = {
+            "latency_ms": int((time.time() - t0) * 1000),
+            "route": route,
+            "blocked": True,
+        }
+
+        return ChatResponse(
+            request_id=request_id,
+            route=route,
+            answer=answer,
+            citations=[],
+            telemetry=telemetry,
+            trace=trace
+        )
+
 
     route = "direct_answer" # temp
     answer = f"(Demo) You said {message}"
@@ -45,5 +91,6 @@ def chat(req: ChatRequest):
         route=route,
         answer=answer,
         citations=[],
-        telemetry=telemetry
+        telemetry=telemetry,
+        trace=trace
     )
