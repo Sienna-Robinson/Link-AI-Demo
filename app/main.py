@@ -58,9 +58,9 @@ def chat(req: ChatRequest):
     if det["blocked"]:
         route = "refuse_unsafe"
         answer = (
-            f"Unfortunately, your request contains wording that is associated with malicious prompt injection (domain: {domain})." \
-            f"I am unable to assist any further with this question." \
-            f"I can help you with a different question, or feel free to contact our support team." \
+            f"Unfortunately, your request contains wording that is associated with malicious prompt injection (domain: {domain}). " \
+            f"I am unable to assist any further with this question. " \
+            f"I can help you with a different question, or feel free to contact our support team. " \
         )
 
         telemetry = {
@@ -77,14 +77,19 @@ def chat(req: ChatRequest):
             telemetry=telemetry,
             trace=trace
         )
+    
+    # LLM-A safety classifier goes here. hard code skip for now
+    trace["safety"]["llm_classifier"] = {"skipped": True, "reason": "demo_v1"}
 
-
-    route = "direct_answer" # temp
+    # routing: call LLM-A to output a validated JSON plan. hard coded direct for now
+    route = "direct_answer"
+    
     answer = f"(Demo) You said {message}"
 
     telemetry = {
         "latency_ms": int((time.time() - t0) * 1000),
-        "route": route
+        "route": route,
+        "blocked": False
     }
     return ChatResponse(
         request_id=request_id,
