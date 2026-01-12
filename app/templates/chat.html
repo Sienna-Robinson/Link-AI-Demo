@@ -18,6 +18,12 @@
     .side { padding: 16px; border-left: 1px solid #ddd; background: #fbfbfc; }
     pre { white-space: pre-wrap; word-wrap: break-word; background: #fff; padding: 12px; border-radius: 12px; border: 1px solid #eee; height: calc(100vh - 64px); overflow: auto; }
     .title { font-weight: 600; margin-bottom: 10px; }
+    .msg.bot h1, 
+    .msg.bot h2, 
+    .msg.bot h3 { margin-top: 0.6em; }
+    .msg.bot ul { padding-left: 1.2em; }
+    .msg.bot li { margin-bottom: 4px; }
+    .msg.bot strong { font-weight: 600; }
   </style>
 </head>
 <body>
@@ -35,7 +41,7 @@
       <pre id="trace">{}</pre>
     </div>
   </div>
-
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
   const msgs = document.getElementById("msgs");
   const text = document.getElementById("text");
@@ -43,12 +49,20 @@
   const traceBox = document.getElementById("trace");
 
   function addMsg(role, content) {
-    const div = document.createElement("div");
-    div.className = `msg ${role}`;
+  const div = document.createElement("div");
+  div.className = `msg ${role}`;
+
+  if (role === "bot") {
+    // Render markdown → HTML
+    div.innerHTML = marked.parse(content);
+  } else {
+    // User messages stay plain text
     div.textContent = content;
-    msgs.appendChild(div);
-    msgs.scrollTop = msgs.scrollHeight;
   }
+
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
 
   async function sendMessage() {
     const message = text.value.trim();
