@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Link AI Demo</title>
+  <style>
+    body { font-family: system-ui, Arial; margin: 0; background: #f6f7f9; }
+    .wrap { display: grid; grid-template-columns: 2fr 1fr; height: 100vh; }
+    .chat { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .msgs { flex: 1; overflow: auto; padding: 12px; background: white; border-radius: 12px; }
+    .msg { margin: 10px 0; padding: 10px 12px; border-radius: 12px; max-width: 85%; }
+    .user { background: #e7f0ff; margin-left: auto; }
+    .bot { background: #f0f0f0; margin-right: auto; }
+    .input { display: flex; gap: 8px; }
+    input { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid #ccc; }
+    button { padding: 10px 14px; border-radius: 10px; border: 0; background: #111; color: #fff; cursor: pointer; }
+    .side { padding: 16px; border-left: 1px solid #ddd; background: #fbfbfc; }
+    pre { white-space: pre-wrap; word-wrap: break-word; background: #fff; padding: 12px; border-radius: 12px; border: 1px solid #eee; height: calc(100vh - 64px); overflow: auto; }
+    .title { font-weight: 600; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="chat">
+      <div class="title">Link AI Demo</div>
+      <div id="msgs" class="msgs"></div>
+      <div class="input">
+        <input id="text" placeholder="Ask a question…" />
+        <button id="send">Send</button>
+      </div>
+    </div>
+    <div class="side">
+      <div class="title">Trace (routing/safety)</div>
+      <pre id="trace">{}</pre>
+    </div>
+  </div>
+
+<script>
+  const msgs = document.getElementById("msgs");
+  const text = document.getElementById("text");
+  const send = document.getElementById("send");
+  const traceBox = document.getElementById("trace");
+
+  function addMsg(role, content) {
+    const div = document.createElement("div");
+    div.className = `msg ${role}`;
+    div.textContent = content;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  async function sendMessage() {
+    const message = text.value.trim();
+    if (!message) return;
+    text.value = "";
+    addMsg("user", message);
+
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ message })
+    });
+
+    if (!res.ok) {
+      addMsg("bot", `Error: ${res.status}`);
+      return;
+    }
+
+    const data = await res.json();
+    addMsg("bot", data.answer);
+    traceBox.textContent = JSON.stringify(data.trace ?? {}, null, 2);
+  }
+
+  send.addEventListener("click", sendMessage);
+  text.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+</script>
+</body>
+</html>

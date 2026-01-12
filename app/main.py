@@ -1,6 +1,9 @@
-from typing import Any, Dict, List, Optional, Union
-from fastapi import FastAPI
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi import Request
 
 from .safety.deterministic import deterministic_safety_check
 
@@ -8,6 +11,12 @@ import time
 import uuid
 
 app = FastAPI(title="Link AI Demo", version="0.1")
+
+templates = Jinja2Templates(directory="app/templates")
+
+@app.get("/", response_class=HTMLResponse)
+def ui(request: Request):
+    return templates.TemplateResponse("chat.html", {"request": request})
 
 class ChatRequest(BaseModel):
     message: str
