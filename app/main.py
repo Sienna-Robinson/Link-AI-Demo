@@ -1,22 +1,49 @@
-from typing import Union
+from typing import Any, Dict, List, Optional, Union
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-app = FastAPI()
+import time
+import uuid
 
-class Item(BaseModel):
-    name: str
-    price: float
-    is_offer: Union[bool, None] = None
+app = FastAPI(title="Link AI Demo", version="0.1")
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
+class ChatRequest(BaseModel):
+    message: str
+    conversation_summary: Optional[str]= None
+    user_profile: Dict[str, Any] = {}
+    ecu_context: Dict[str, Any] = {}
+    attachments: List[Dict[str, Any]] = []
 
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
+class ChatResponse(BaseModel):
+    request_id: str
+    route: str
+    answer:str
+    citations: List[Dict[str, Any]] = []
+    telemetry: Dict[str, Any] = {}
 
-@app.put("/items/{item_id}")
-def update_item(item_id: int, item: Item):
-    return {"item_price": item.price, "item_id": item_id}
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+@app.post("/chat", response_model=ChatResponse)
+def chat(req: ChatRequest):
+    request_id = str(uuid.uuid4())
+    t0 = time.time()
+
+    # normalise just a little
+    message = req.message.strip()
+
+    route = "direct_answer" # temp
+    answer = f"(Demo) You said {message}"
+
+    telemetry = {
+        "latency_ms": int((time.time() - t0) * 1000),
+        "route": route
+    }
+    return ChatResponse(
+        request_id=request_id,
+        route=route,
+        answer=answer,
+        citations=[],
+        telemetry=telemetry
+    )
