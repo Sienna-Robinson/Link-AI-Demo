@@ -6,11 +6,12 @@ from fastapi.templating import Jinja2Templates
 from fastapi import Request
 
 from .safety.deterministic import deterministic_safety_check
+from .router.llm_router import route_with_llm
 
 import time
 import uuid
 
-app = FastAPI(title="Link AI Demo", version="0.1")
+app = FastAPI(title="Link AI Demo", version="0.2")
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -88,12 +89,49 @@ def chat(req: ChatRequest):
         )
     
     # LLM-A safety classifier goes here. hard code skip for now
-    trace["safety"]["llm_classifier"] = {"skipped": True, "reason": "demo_v0.1"}
+    trace["safety"]["llm_classifier"] = {"skipped": True, "reason": "demo_v0.2"}
 
     # routing: call LLM-A to output a validated JSON plan. hard coded direct for now
-    route = "direct_answer"
+    try:
+        plan = route_with_llm(
+            message=message,
+            conversation_summary=req.conversation_summary,
+            user_profile=req.user_profile,
+            ecu_context=req.ecu_context
+        )
+        trace["routing"]["llm_plan"] = plan.model_dump()
+    except Exception as e:
+        trace["routing"]["llm_plan_error"] = str(e)
+        plan = None
     
-    answer = f"(Demo) You said {message}"
+    if plan is None:
+        route = "direct_answer"
+        answer = f"(Demo) Router failed, fallback to direct. You said: {message}"
+        trace["execution"] = {"performed": "direct_answer_fallback"}
+    else:
+        route = plan.mode
+        trace["routing"]["mode"] = route
+
+        if route == "clarify":
+            answer = plan.clarifying_question or "Could you clarify what ECU model and what you’re trying to do?"
+            trace["execution"] = {"performed": "clarify"}
+
+        elif route == "tool":
+            # For now: stub until you implement lookup_fault_code
+            trace["execution"] = {"performed": "tool_stub", "tool_calls": [tc.model_dump() for tc in plan.tool_calls]}
+            answer = f"(Demo) Routed to tool. Would execute: {plan.tool_calls}"
+
+        elif route == "rag":
+            trace["execution"] = {"performed": "rag_stub", "rag_query": plan.rag_query}
+            answer = f"(Demo) Routed to RAG. Would retrieve docs using query: {plan.rag_query or message}"
+
+        elif route == "hybrid":
+            trace["execution"] = {"performed": "hybrid_stub", "rag_query": plan.rag_query, "tool_calls": [tc.model_dump() for tc in plan.tool_calls]}
+            answer = "(Demo) Routed to hybrid (tools + RAG). Next: run tools + retrieve docs, then synthesize."
+
+        else:  # direct_answer
+            trace["execution"] = {"performed": "direct_answer_stub"}
+            answer = f"(Demo) Direct answer mode. You said: {message}"
 
     telemetry = {
         "latency_ms": int((time.time() - t0) * 1000),
