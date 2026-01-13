@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 RouteMode = Literal["direct_answer", "rag", "tool", "hybrid", "clarify"]
+Action = Literal["direct_answer", "rag", "tool","clarify"]
 
 ToolName = Literal["lookup_fault_code"]
 
@@ -14,6 +15,7 @@ class ToolCall(BaseModel):
 
 class RoutePlan(BaseModel):
     mode: RouteMode
+    actions: List[Action] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
     reason: str
 
