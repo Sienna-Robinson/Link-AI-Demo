@@ -1,0 +1,34 @@
+Posted December 23, 2025 -
+Noticed something odd with my recent G5 Neo4 installation. If I key-on the car with my laptop & PCLink not connected to the ECU first, the fuel pump prime behavior is perfectly normal - the pump will run for 3 seconds after key-on, then shuts off until I start up the engine. But if I connect to the ECU with my laptop & PCLink BEFORE I attempt to key-on the car and then key-on some short time later, that same 3 second fuel pump prime operation doesn't happen. Is this normal operation or a bug in the firmware? For reference, I'm using the following fuel pump settings:
+Pump Control Method: Standard
+Fuel Pump Relay Output: Ign 5
+Active State: Low
+Test: Off
+Prime Time: 3.0 Sec.
+I'd hope this isn't considered normal behavior, as there are times when I'd want to have PCLink already connected & ready to start logging before I key-on, to capture data for cold start tuning. While you can still connect & start logging before key-on, not having the prime operation occur can influence what you're trying to tune, i.e., quick & easy cold starts. 
+Posted December 23, 2025 -
+Not normal, I will look into it. The NEO is the first Link ECU that can be powered over USB and so we did spend some time going through it making sure the correct things happen at power on but might have missed this one.
+Posted December 23, 2025 -
+Don't know if this is related or not, but if it helps in the debugging, under the "ECU Status" data, the ECU is reporting a "Database Error - Settings Underflow", with corresponding a Database ID Error # 1001.
+Posted January 4 -
+This is unrelated
+I have done a fix to the fuel pump prime code, it just wasn't resetting the prime time on ignition power on (only on reset of the processor), that fix should be in the next release.
+Posted yesterday at 12:30 PM - 
+I've noticed another odd behavior that may or may not be related. This symptom also happens when the ECU is powered up via USB before 12VDC vehicle power is applied, and the same happens if 12VDC power is removed (switch off ignition) before "disconnecting" PCLink from the ECU or physically unplugging the USB tuning cable from the laptop - the normal "Max ECU Temperature" statistic value gets overwritten to read 302*F, which is obviously wrong. Clearing the ECU Statistics resets the ECU max temp to a normal (current) reading, along with all the other stats.
+Posted 20 hours ago -
+I can replicate this, I will look into it. When the NEO is on USB power none of the Analogs are reading and so it will be something around those voltage readings on power change.
+------------------------------------------
+Posted Saturday at 06:05 AM -
+Got some more questions regarding switching from a G4+ Fury to a G5 Neo4 platform...
+For the closed loop lambda gain settings table, the break points in the table are the same between G4+ and G5 ECUs, and break points still unchangeable, but the scale of the possible gain value settings one can use has changed significantly. For example, the G5 allows a max gain setting of 200, while the G4+ allowed a maximum gain of 20. So if I had good CLL gain settings that were tuned and working well in my G4+, how would I scale them to get the same/similar result with the G5? Is it as simple as just multiply the G4+ value by 10 (20:200)? Or would you suggest completely different gains entirely as better starting points and tune from there?
+Second, for the CLL Update Rate table, assuming that table was tuned and working well with the G4+ platform, I should be able to import that table directly into the G5 and use it as-is, correct? My reasoning here is that the CLL update rate is dominated by delays in exhaust gas flow from the combustion chambers out to the WBO2 sensor. So if nothing was mechanically changed that would changes that delay (i.e., relocated WBO2 sensor), and the update rate table has already been tuned on the G4+ platform, any processing speed increases gained by switching to the G5 would be negligable in comparison to the exhaust flow delays out to the WBO2 sensor.
+Thanks!
+Posted Saturday at 11:38 PM -
+Yes multiply gain by 10.  In theory you shouldnt need a gain larger than about 60 so if multiplying G4+ values by 10 gives you more than 60 I would trim back to 60.  
+Update rate is almost purely gas transport time related, if mechanical setup hasnt changed then set the same.  Note the max in G5/G4X is 10Hz whereas G4+ was 20Hz.   
+Posted Monday at 05:20 AM -
+Perfect, thanks! I wasn't using too much gain with the G4+, so I don't think any of my numbers will be > 60 after multiplying by 10.
+Probably should suggest this for the wish list, but would it be possible in future firmware's to allow the minimum update rate to go fractional, below 1Hz, say 0.5Hz? I think for a lot of cars, especially when the WBO2 sensor is further away from the exhaust ports, even 1 Hz can be too fast of an update rate at low idle RPMs / slow gas flow conditions.
+Posted Monday at 06:34 AM -
+This is one already on the wishlist, just hasn't been a priority yet.
+------------------------------------------
