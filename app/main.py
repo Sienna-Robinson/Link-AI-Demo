@@ -8,6 +8,7 @@ from fastapi import Request
 from .safety.deterministic import deterministic_safety_check
 from .router.llm_router import route_with_llm
 from .tools.dispatch import run_tools
+from .rag.retriever import retrieve
 
 import time
 import uuid
@@ -39,6 +40,19 @@ class ChatResponse(BaseModel):
 def health():
     return {"status": "ok"}
 
+def tool_answer_from_results(tool_results: Dict[str, Any]) -> str:
+    if tool_results.get("calls"):
+        first = tool_results["calls"][0].get("output", {})
+        if first.get("found"):
+            return (
+                f"**{first['code']} - {first.get('title', '')}**\n\n"
+                f"{first.get('summary', '')}\n\n"
+                f"**Common causes:**\n- " + "\n- ".join(first.get("common_causes", [])) + "\n\n"
+                f"**Safe checks:**\n- " + "\n- ".join(first.get("safe_checks", []))
+            )
+        return f"I couldn't find that fault code in the demo database: {first.get('error')}"
+    return "No tool calls were executed."
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     request_id = str(uuid.uuid4())
@@ -60,6 +74,8 @@ def chat(req: ChatRequest):
         "routing": {},
         "execution": {}
     }
+
+    citations: List[Dict[str, Any]] = []
 
     # safety (deterministically for now)
     det = deterministic_safety_check(message)
@@ -114,41 +130,65 @@ def chat(req: ChatRequest):
         route = plan.mode
         trace["routing"]["mode"] = route
 
-        if route == "clarify":
-            answer = plan.clarifying_question or "Could you clarify what ECU model and what you’re trying to do?"
-            trace["execution"] = {"performed": "clarify"}
+        actions = list(plan.actions or [])
 
-        elif route == "tool":
-            tool_results = run_tools(plan.tool_calls)
-            trace["execution"] = {"performed": "tool", "tool_results": tool_results}
-
-            # no AI agent yet to coordinate output, so just output user-friendly message for now (markdown!! teehee)
-            if tool_results["calls"]:
-                first = tool_results["calls"][0]["output"]
-                if first.get("found"):
-                    answer = (
-                        f"**{first['code']} - {first.get('title', '')}**\n\n"
-                        f"{first.get('summary', '')}\n\n"
-                        f"**Common causes:**\n- " + "\n- ".join(first.get("common_causes", [])) + "\n\n"
-                        f"**Safe checks:**\n- " + "\n- ".join(first.get("safe_checks", []))
-                    )
-                else:
-                    answer = f"I couldn't find that fault code in the demo database: {first.get('error')}"
+        if not actions:
+            if route in ("direct_answer", "rag", "tool" "clarify"):
+                actions = [route]
             else:
-                answer = "No tool calls were executed."
+                actions = ["rag"] if plan.rag_query or plan.rag_collections else ["direct_answer"]
+
+        trace["routing"]["actions"] = actions
+
+        tool_results = None
+        rag_result = None
+
+        clarify_q = plan.clarifying_question if "clarify" in actions else None
+
+        if "tool" in actions:
+            tool_results = run_tools(plan.tool_calls)
+            trace["execution"]["tool"] =  tool_results
+
+            for cit in tool_results.get("calls", []):
+                citations.append({"type": "tool", "name": cit["name"], "args": cit["args"]})
 
         # user-friendly message
-        elif route == "rag":
-            trace["execution"] = {"performed": "rag_stub", "rag_query": plan.rag_query}
-            answer = f"(Demo) Routed to RAG. Would retrieve docs using query: {plan.rag_query or message}"
+        if "rag" in actions:
+            rag_result = retrieve(plan.rag_query or message, top_k=3)
+            trace["execution"]["rag"] = {
+                "query": rag_result["query"],
+                "top_k": rag_result["top_k"],
+                "hits": [
+                    {"score": hit["score"], "doc_id": hit["doc_id"], "chunk_id": hit["chunk_id"]} 
+                    for hit in rag_result["hits"]
+                ],
+            }
+            # citations for UI
+            citations.extend([
+                {"type": "rag", "doc_id": hit["doc_id"], "chunk_id": hit["chunk_id"], "score": hit["score"]}
+                for hit in rag_result["hits"]
+            ])
+            
+        parts: List[str] = []
 
-        elif route == "hybrid":
-            trace["execution"] = {"performed": "hybrid_stub", "rag_query": plan.rag_query, "tool_calls": [tc.model_dump() for tc in plan.tool_calls]}
-            answer = "(Demo) Routed to hybrid (tools + RAG). Next: run tools + retrieve docs, then synthesize."
+        if "direct_answer" in actions:
+            parts.append(f"(Demo) General guidance for: **{message}**")
 
-        else:  # direct_answer
-            trace["execution"] = {"performed": "direct_answer_stub"}
-            answer = f"(Demo) Direct answer mode. You said: {message}"
+        if tool_results is not None:
+            parts.append("**Tool result:**\n\n" + tool_answer_from_results(tool_results))
+
+        if rag_result is not None:
+            parts.append("Relevant sources:**")
+            for i, hit in enumerate(rag_result["hits"], start=1):
+                snippet = (hit["text"][:350] + "...") if len(hit["text"]) > 350 else hit["text"]
+                parts.append(f"**Source {i}: {hit['doc_id']} (chunk {hit['chunk_id']})**\n\n{snippet}")
+                
+        if clarify_q:
+            parts.append(f"**Quick question:** {clarify_q}")
+
+        answer = "\n\n".join(parts) if parts else f"(Demo) No actions executed. You said: {message}"
+
+        trace["execution"]["performed"] = route
 
     telemetry = {
         "latency_ms": int((time.time() - t0) * 1000),
@@ -159,7 +199,7 @@ def chat(req: ChatRequest):
         request_id=request_id,
         route=route,
         answer=answer,
-        citations=[],
+        citations=citations,
         telemetry=telemetry,
         trace=trace
     )
