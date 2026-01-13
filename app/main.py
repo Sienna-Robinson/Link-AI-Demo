@@ -14,7 +14,9 @@ from .llm.synthesizer import synthesize_with_llm_b
 import time
 import uuid
 
-app = FastAPI(title="Link AI Demo", version="0.3")
+CONVERSATIONS: Dict[str, List[Dict[str, str]]] = {}
+
+app = FastAPI(title="Link AI Demo", version="0.4")
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -24,7 +26,8 @@ def ui(request: Request):
 
 class ChatRequest(BaseModel):
     message: str
-    conversation_summary: Optional[str]= None
+    session_id: str
+    conversation_summary: Optional[str] = None
     user_profile: Dict[str, Any] = {}
     ecu_context: Dict[str, Any] = {}
     attachments: List[Dict[str, Any]] = []
@@ -76,6 +79,11 @@ def chat(req: ChatRequest):
         "execution": {}
     }
 
+    session_id = req.session_id
+
+    history = CONVERSATIONS.get(session_id, [])
+
+
     citations: List[Dict[str, Any]] = []
 
     # safety (deterministically for now)
@@ -107,7 +115,7 @@ def chat(req: ChatRequest):
         )
     
     # LLM-A safety classifier goes here. hard code skip for now
-    trace["safety"]["llm_classifier"] = {"skipped": True, "reason": "demo_v0.3"}
+    trace["safety"]["llm_classifier"] = {"skipped": True, "reason": "demo_v0.4"}
 
     # routing: call LLM-A to output a validated JSON plan. This will be upgraded to an AI agent 
     # state machine in the future as this many if/else statements are ugly (and bad practice lol)
@@ -172,10 +180,17 @@ def chat(req: ChatRequest):
         answer = synthesize_with_llm_b(
             user_message=message,
             actions=[str(action) for action in actions],
+            history=history,
             rag_hits=rag_result["hits"] if rag_result else None,
             tool_results=tool_results,
             clarifying_question=clarify_q,
         )
+
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": answer})
+
+        # Keep last N turns (prevent token blowup)
+        CONVERSATIONS[session_id] = history[-10:]
 
         trace["execution"]["performed"] = route
 

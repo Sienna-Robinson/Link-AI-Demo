@@ -36,6 +36,7 @@ def extract_text(resp) -> str:
 def synthesize_with_llm_b(
         user_message: str,
         actions: List[str],
+        history: Optional[List[Dict[str, str]]] = None,
         rag_hits: Optional[List[Dict[str, Any]]] = None,
         tool_results: Optional[Dict[str, Any]] = None,
         clarifying_question: Optional[str] = None
@@ -58,8 +59,18 @@ def synthesize_with_llm_b(
         context_parts.append(
             f"CLARIFYING QUESTION TO ASK:\n{clarifying_question}"
         )
+
+    history_text = ""
+    if history:
+        history_text = "\n".join(
+            f"{m['role'].upper()}: {m['content']}" for m in history
+        )
+
     
     user_prompt = f"""
+CONVERSATION HISTORY:
+{history_text}
+
 USER QUESTION:
 {user_message}
 

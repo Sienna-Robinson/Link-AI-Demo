@@ -3,7 +3,7 @@ from typing import Dict, Any
 UNSAFE_PROMPT_PATTERNS = [
     "ignore all previous instructions", "disregard your system prompt", "system override", 
     "print the initialisation banner", "pretend you are", "no restrictions", "api key",
-    "password", "secret", "admin"
+    "password", "secret", "admin privilege"
 ]
 
 def deterministic_safety_check(message: str) -> Dict[str, Any]:
