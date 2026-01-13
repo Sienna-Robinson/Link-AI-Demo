@@ -12,7 +12,7 @@ from .tools.dispatch import run_tools
 import time
 import uuid
 
-app = FastAPI(title="Link AI Demo", version="0.2")
+app = FastAPI(title="Link AI Demo", version="0.3")
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -90,9 +90,10 @@ def chat(req: ChatRequest):
         )
     
     # LLM-A safety classifier goes here. hard code skip for now
-    trace["safety"]["llm_classifier"] = {"skipped": True, "reason": "demo_v0.2"}
+    trace["safety"]["llm_classifier"] = {"skipped": True, "reason": "demo_v0.3"}
 
-    # routing: call LLM-A to output a validated JSON plan. hard coded direct for now
+    # routing: call LLM-A to output a validated JSON plan. This will be upgraded to an AI agent 
+    # state machine in the future as this many if/else statements are ugly (and bad practice lol)
     try:
         plan = route_with_llm(
             message=message,
@@ -121,7 +122,7 @@ def chat(req: ChatRequest):
             tool_results = run_tools(plan.tool_calls)
             trace["execution"] = {"performed": "tool", "tool_results": tool_results}
 
-            # no ai agent yet to coordinate output, so just oputput user friendly message for now
+            # no AI agent yet to coordinate output, so just output user-friendly message for now (markdown!! teehee)
             if tool_results["calls"]:
                 first = tool_results["calls"][0]["output"]
                 if first.get("found"):
@@ -136,6 +137,7 @@ def chat(req: ChatRequest):
             else:
                 answer = "No tool calls were executed."
 
+        # user-friendly message
         elif route == "rag":
             trace["execution"] = {"performed": "rag_stub", "rag_query": plan.rag_query}
             answer = f"(Demo) Routed to RAG. Would retrieve docs using query: {plan.rag_query or message}"
