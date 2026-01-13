@@ -9,6 +9,7 @@ from .safety.deterministic import deterministic_safety_check
 from .router.llm_router import route_with_llm
 from .tools.dispatch import run_tools
 from .rag.retriever import retrieve
+from .llm.synthesizer import synthesize_with_llm_b
 
 import time
 import uuid
@@ -152,7 +153,6 @@ def chat(req: ChatRequest):
             for cit in tool_results.get("calls", []):
                 citations.append({"type": "tool", "name": cit["name"], "args": cit["args"]})
 
-        # user-friendly message
         if "rag" in actions:
             rag_result = retrieve(plan.rag_query or message, top_k=3)
             trace["execution"]["rag"] = {
@@ -168,25 +168,14 @@ def chat(req: ChatRequest):
                 {"type": "rag", "doc_id": hit["doc_id"], "chunk_id": hit["chunk_id"], "score": hit["score"]}
                 for hit in rag_result["hits"]
             ])
-            
-        parts: List[str] = []
 
-        if "direct_answer" in actions:
-            parts.append(f"(Demo) General guidance for: **{message}**")
-
-        if tool_results is not None:
-            parts.append("**Tool result:**\n\n" + tool_answer_from_results(tool_results))
-
-        if rag_result is not None:
-            parts.append("Relevant sources:**")
-            for i, hit in enumerate(rag_result["hits"], start=1):
-                snippet = (hit["text"][:350] + "...") if len(hit["text"]) > 350 else hit["text"]
-                parts.append(f"**Source {i}: {hit['doc_id']} (chunk {hit['chunk_id']})**\n\n{snippet}")
-                
-        if clarify_q:
-            parts.append(f"**Quick question:** {clarify_q}")
-
-        answer = "\n\n".join(parts) if parts else f"(Demo) No actions executed. You said: {message}"
+        answer = synthesize_with_llm_b(
+            user_message=message,
+            actions=[str(action) for action in actions],
+            rag_hits=rag_result["hits"] if rag_result else None,
+            tool_results=tool_results,
+            clarifying_question=clarify_q,
+        )
 
         trace["execution"]["performed"] = route
 
