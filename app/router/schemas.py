@@ -1,17 +1,27 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, List, Literal, Optional, Union
 from pydantic import BaseModel, Field
 
 RouteMode = Literal["direct_answer", "rag", "tool", "hybrid", "clarify"]
 Action = Literal["direct_answer", "rag", "tool","clarify"]
 
-ToolName = Literal["lookup_fault_code"]
-
 class FaultCodeArgs(BaseModel):
     code: str = Field(..., description="OBD_II / Link fault code string, e.g. P0123")
 
-class ToolCall(BaseModel):
-    name: ToolName
+class FitmentArgs(BaseModel):
+    make: str
+    model: str
+    engine_detail: Optional[str] = None
+    year: Optional[int] = None
+
+class FaultCodeToolCall(BaseModel):
+    name: Literal["lookup_fault_code"]
     args: FaultCodeArgs
+
+class FitmentToolCall(BaseModel):
+    name: Literal["lookup_ecu_fitment"]
+    args: FitmentArgs
+
+ToolCall = Union[FaultCodeToolCall, FitmentToolCall]
 
 class RoutePlan(BaseModel):
     mode: RouteMode
